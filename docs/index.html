@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SVD · 看见线性变换</title>
+<style>
+:root{color-scheme:light;--ink:#243832;--muted:#727b73;--accent:#356854;--line:#e3e5dd;--paper:#fafbf7}
+*{box-sizing:border-box}body{margin:0;background:#f1f2ec;color:var(--ink);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:1480px;margin:auto;padding:56px 40px 36px}.eyebrow{font-size:11px;letter-spacing:.22em;color:var(--accent);font-weight:650;margin:0 0 18px}header{display:flex;justify-content:space-between;align-items:center;gap:32px;margin-bottom:30px}h1{font-size:clamp(30px,4vw,44px);font-weight:550;letter-spacing:-.04em;margin:0 0 12px}p{line-height:1.8;color:var(--muted);margin:0}.intro{max-width:620px}.formula{font-family:Georgia,serif;font-size:34px;letter-spacing:.05em;white-space:nowrap;color:var(--accent)}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:28px 0}.toolbar-note{margin-left:auto;font-size:12px;color:var(--muted)}.steps,.controls{display:grid;gap:16px;margin:20px 0}.steps{grid-template-columns:repeat(4,minmax(0,1fr))}.controls{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:28px}article,section{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:22px}article{padding:18px 14px 12px;box-shadow:0 4px 16px #23382d03}h2{font-size:14px;font-weight:550;margin:0 0 18px;letter-spacing:.01em}.step-number{font:11px ui-monospace,monospace;color:#89988b;margin-right:10px}.control-title{display:flex;align-items:center;justify-content:space-between}.control-title span{font:italic 28px Georgia,serif;color:var(--accent)}.control-title small{font-size:12px;font-weight:400}canvas{width:100%;aspect-ratio:1;display:block;border-radius:6px}
+input,button{font:inherit}input[type=number]{width:100%;min-width:0;padding:10px;border:1px solid var(--line);border-radius:6px;background:#f2f4ee;color:var(--ink);font:15px ui-monospace,SFMono-Regular,monospace;text-align:center;font-variant-numeric:tabular-nums}input:focus-visible,button:focus-visible,.file:focus-within{outline:2px solid var(--accent);outline-offset:3px}.matrix{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:20px 0}.controls section>label{font-size:12px;color:var(--muted)}input[type=checkbox]{accent-color:var(--accent);vertical-align:middle}.sigma-label{display:flex;align-items:center;justify-content:space-between}.sigma-label input[type=number]{width:88px;padding:6px;font-size:14px}input[type=range]{width:100%;accent-color:var(--accent);margin:12px 0 16px;cursor:pointer}.range-ends{display:flex;justify-content:space-between;font:10px ui-monospace,monospace;color:var(--muted);margin:-8px 0 16px}
+button,.file{position:relative;display:inline-flex;align-items:center;background:transparent;border:1px solid #d6ddd1;border-radius:7px;padding:10px 16px;color:var(--ink);cursor:pointer;font-size:12px;transition:background .15s,border-color .15s}button:hover{background:#e5eadd;border-color:#bcc9b6}.file{background:var(--accent);border-color:var(--accent);color:white;overflow:hidden}.file:hover{background:#28533f}.file input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.result-panel{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:12px 32px}.result-panel h2{margin-bottom:8px}.result-panel pre{margin:0;justify-self:end}pre{font:18px/1.8 ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums;overflow:auto;color:var(--accent)}#status{grid-column:1/-1;color:#a53030;font-size:13px}#status:empty{display:none}small{color:var(--muted);font-size:11px;line-height:1.7}.footer{font-size:11px;margin-top:20px;text-align:center;color:var(--muted)}
+@media(max-width:1000px){main{padding:36px 24px}.steps{grid-template-columns:repeat(2,minmax(0,1fr))}.formula{font-size:26px}.controls{gap:10px}.controls section{padding:16px}}
+@media(max-width:650px){main{padding:28px 14px}.controls{grid-template-columns:1fr}.steps{gap:10px}article{padding:12px 8px}h2{font-size:12px}.step-number{margin-right:4px}header{display:block}.formula{margin-top:20px;font-size:25px}.toolbar-note{width:100%;margin-left:0}.result-panel{grid-template-columns:1fr}.result-panel pre{justify-self:start}.control-title{font-size:15px}}
+.control-reset{display:block;margin-top:18px;padding:7px 12px;font-size:11px}
+</style>
+<main>
+<div class="eyebrow">LINEAR ALGEBRA / INTERACTIVE STUDY</div>
+<header><div class="intro"><h1>SVD可视化</h1><p>从一张图片出发，理解旋转、缩放与反射。<br>沿着 SVD 的分解顺序，观察每一步如何改变空间。</p></div><div class="formula" aria-label="A 等于 U Sigma V 转置">A = UΣVᵀ</div></header>
+<div class="toolbar">
+<label class="file">选择图片 <input id="upload" type="file" accept="image/*"></label>
+<button id="reset" type="button">重置变换</button> <button id="sample" type="button">恢复示例图</button><span class="toolbar-note">四图同尺度 · 左上角 ± 表示坐标范围</span></div>
+<div class="steps">
+<article><h2><span class="step-number">01</span>原图 · x</h2><canvas aria-label="原始图片"></canvas></article>
+<article><h2><span class="step-number">02</span>旋转 / 反射 · Vᵀx</h2><canvas aria-label="V 转置变换后的图片"></canvas></article>
+<article><h2><span class="step-number">03</span>缩放 · ΣVᵀx</h2><canvas aria-label="缩放后的图片"></canvas></article>
+<article><h2><span class="step-number">04</span>最终结果 · Ax</h2><canvas aria-label="最终变换后的图片"></canvas></article>
+</div>
+<div class="controls">
+<section id="V"><h2 class="control-title"><span>V</span><small>01 / 先应用 Vᵀ</small></h2></section>
+<section><h2 class="control-title"><span>Σ</span><small>02 / 轴向缩放</small></h2>
+<div class="sigma-label"><label for="s1">σ₁</label><input id="o1" aria-label="σ₁ 精确数值" type="number" min="0" max="5" step="0.01" value="1.00"></div><input id="s1" aria-label="σ₁ 滑块" type="range" min="0" max="5" step="0.01" value="1"><div class="range-ends"><span>0</span><span>2.5</span><span>5</span></div>
+<div class="sigma-label"><label for="s2">σ₂</label><input id="o2" aria-label="σ₂ 精确数值" type="number" min="0" max="5" step="0.01" value="1.00"></div><input id="s2" aria-label="σ₂ 滑块" type="range" min="0" max="5" step="0.01" value="1"><div class="range-ends"><span>0</span><span>2.5</span><span>5</span></div>
+<small>奇异值非负，范围为 0～5；可独立调节，不强制降序排列。</small>
+<button id="resetSigma" class="control-reset" type="button">重置 Σ</button>
+</section>
+<section id="U"><h2 class="control-title"><span>U</span><small>03 / 最后应用 U</small></h2></section>
+</div>
+<section class="result-panel"><div><h2>合成矩阵 · A = UΣVᵀ</h2><small>编辑 V、U 的任一元素，其余元素自动调整以保持正交。</small></div><pre id="result"></pre><p id="status" role="status"></p></section>
+<noscript>请启用 JavaScript 以使用交互演示。</noscript>
+</main>
+<script>
+'use strict';
+const identity = () => [1,0,0,1];
+const state = {U:identity(),V:identity()};
+const $ = id => document.getElementById(id);
+const canvases = [...document.querySelectorAll('canvas')];
+const source = document.createElement('canvas');
+const boxes = {};
+function multiply(a,b){return [a[0]*b[0]+a[1]*b[2],a[0]*b[1]+a[1]*b[3],a[2]*b[0]+a[3]*b[2],a[2]*b[1]+a[3]*b[3]];}
+function orthogonal(t,d){const c=Math.cos(t),s=Math.sin(t);return [c,-d*s,s,d*c];}
+function edit(name,k,text){
+  const value=Number(text), m=state[name];
+  if(text.trim()==='' || !Number.isFinite(value) || Math.abs(value)>1){$('status').textContent='请输入 −1 到 1 之间的有限数值。';sync();return;}
+  const d=m[0]*m[3]-m[1]*m[2]>0?1:-1;
+  let t,angles;
+  if(k===0 || k===3){t=Math.acos(k===0?value:value/d);angles=[t,-t];}
+  else{t=Math.asin(k===2?value:-value/d);angles=[t,Math.PI-t];}
+  const candidates=angles.map(a=>orthogonal(a,d));
+  const distance=q=>q.reduce((sum,v,i)=>sum+(v-m[i])**2,0);
+  state[name]=distance(candidates[0])<=distance(candidates[1])?candidates[0]:candidates[1];
+  $('status').textContent='';sync();schedule();
+}
+for(const name of ['U','V']){
+  const grid=document.createElement('div');grid.className='matrix';boxes[name]=[];
+  for(let k=0;k<4;k++){
+    const input=document.createElement('input');input.type='number';input.min='-1';input.max='1';input.step='any';
+    input.setAttribute('aria-label',`${name} 第 ${Math.floor(k/2)+1} 行第 ${k%2+1} 列`);
+    input.addEventListener('change',()=>edit(name,k,input.value));
+    grid.append(input);boxes[name].push(input);
+  }
+  $(name).append(grid);
+  const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.id='reflect'+name;
+  check.addEventListener('change',()=>{state[name]=multiply(state[name],[1,0,0,-1]);sync();schedule();});
+  label.append(check,document.createTextNode(' 反射（行列式 −1）'));$(name).append(label);
+  const reset=document.createElement('button');reset.type='button';reset.className='control-reset';reset.textContent='重置 '+name;
+  reset.addEventListener('click',()=>{state[name]=identity();$('status').textContent='';sync();schedule();});
+  $(name).append(reset);
+}
+function sync(){for(const name of ['U','V']){boxes[name].forEach((box,k)=>box.value=(Math.abs(state[name][k])<0.0005?0:state[name][k]).toFixed(3));const m=state[name];$('reflect'+name).checked=m[0]*m[3]-m[1]*m[2]<0;}}
+let pending=false;
+function schedule(){if(!pending){pending=true;requestAnimationFrame(()=>{pending=false;render();});}}
+function render(){
+  const s1=Number($('s1').value),s2=Number($('s2').value),v=state.V;
+  $('o1').value=s1.toFixed(2);$('o2').value=s2.toFixed(2);
+  const vt=[v[0],v[2],v[1],v[3]],scaled=multiply([s1,0,0,s2],vt),a=multiply(state.U,scaled);
+  const stages=[identity(),vt,scaled,a];
+  const w=source.width/Math.max(source.width,source.height),h=source.height/Math.max(source.width,source.height);
+  const limit=Math.max(1.2,...stages.flatMap(m=>[1.1*(Math.abs(m[0])*w+Math.abs(m[1])*h),1.1*(Math.abs(m[2])*w+Math.abs(m[3])*h)]));
+  stages.forEach((m,i)=>{
+    const canvas=canvases[i],size=Math.max(1,Math.round(canvas.getBoundingClientRect().width*(window.devicePixelRatio||1)));
+    if(canvas.width!==size || canvas.height!==size){canvas.width=size;canvas.height=size;}
+    const ctx=canvas.getContext('2d'),center=size/2,unit=size/(2*limit);
+    ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,size,size);
+    ctx.strokeStyle='#e7edf5';ctx.lineWidth=1;
+    for(let n=Math.ceil(-limit);n<=limit;n++){ctx.beginPath();ctx.moveTo(center+n*unit,0);ctx.lineTo(center+n*unit,size);ctx.moveTo(0,center+n*unit);ctx.lineTo(size,center+n*unit);ctx.stroke();}
+    // Canvas 的 y 轴向下；用两次符号转换保持数学坐标的 y 轴向上。
+    ctx.save();ctx.translate(center,center);ctx.scale(unit,-unit);ctx.transform(m[0],m[2],m[1],m[3],0,0);
+    if(s1!==0 && s2!==0 || i<2){ctx.scale(1,-1);ctx.drawImage(source,-w,-h,2*w,2*h);}
+    ctx.restore();
+    // 零奇异值时面积坍缩：显式绘制采样点，避免 drawImage 丢弃奇异变换。
+    if(i>=2 && (s1===0 || s2===0)){
+      const pixels=source.getContext('2d').getImageData(0,0,source.width,source.height).data;
+      const stride=Math.max(1,Math.ceil(Math.max(source.width,source.height)/180));
+      for(let y=0;y<source.height;y+=stride)for(let x=0;x<source.width;x+=stride){
+        const k=(y*source.width+x)*4,px=((x+.5)/source.width*2-1)*w,py=(1-(y+.5)/source.height*2)*h;
+        ctx.fillStyle=`rgba(${pixels[k]},${pixels[k+1]},${pixels[k+2]},${pixels[k+3]/255})`;
+        ctx.fillRect(center+unit*(m[0]*px+m[1]*py)-1,center-unit*(m[2]*px+m[3]*py)-1,2,2);
+      }
+    }
+    ctx.strokeStyle='#8798ad';ctx.beginPath();ctx.moveTo(center,0);ctx.lineTo(center,size);ctx.moveTo(0,center);ctx.lineTo(size,center);ctx.stroke();
+    ctx.fillStyle='#536379';ctx.font=`${12*(window.devicePixelRatio||1)}px system-ui`;ctx.fillText(`±${limit.toFixed(2)}`,6,16*(window.devicePixelRatio||1));
+  });
+  const f=n=>(Math.abs(n)<0.00005?0:n).toFixed(4).padStart(8);
+  $('result').textContent=`[ ${f(a[0])}  ${f(a[1])} ]\n[ ${f(a[2])}  ${f(a[3])} ]`;
+}
+function sample(){
+  source.width=source.height=180;const ctx=source.getContext('2d'),pixels=ctx.createImageData(180,180);
+  for(let row=0;row<180;row++)for(let col=0;col<180;col++){
+    const x=col/179*2-1,y=row/179*2-1,k=(row*180+col)*4;
+    let c=x*x+y*y<.88**2?[255,209,31]:[255,255,255];
+    if((x+.32)**2+(y+.22)**2<.1**2 || (x-.32)**2+(y+.22)**2<.1**2 || (Math.abs(y-(.42-.55*x*x))<.025 && Math.abs(x)<.55))c=[31,26,20];
+    pixels.data.set([...c,x*x+y*y<.88**2?255:0],k);
+  }
+  ctx.putImageData(pixels,0,0);schedule();
+}
+let uploadVersion=0;
+$('upload').addEventListener('change',()=>{
+  const file=$('upload').files[0];if(!file)return;
+  const version=++uploadVersion,url=URL.createObjectURL(file),img=new Image();
+  img.onload=()=>{URL.revokeObjectURL(url);if(version!==uploadVersion)return;const ratio=Math.min(1,800/Math.max(img.width,img.height));source.width=Math.max(1,Math.round(img.width*ratio));source.height=Math.max(1,Math.round(img.height*ratio));source.getContext('2d').drawImage(img,0,0,source.width,source.height);$('status').textContent='';schedule();};
+  img.onerror=()=>{URL.revokeObjectURL(url);if(version===uploadVersion)$('status').textContent='无法读取图片，请选择浏览器支持的图片格式。';};img.src=url;
+});
+$('sample').onclick=()=>{uploadVersion++;$('upload').value='';$('status').textContent='';sample();};
+$('resetSigma').onclick=()=>{$('s1').value=$('s2').value='1';$('status').textContent='';schedule();};
+$('reset').onclick=()=>{state.U=identity();state.V=identity();$('s1').value=$('s2').value='1';$('status').textContent='';sync();schedule();};
+for(const id of ['s1','s2'])$(id).addEventListener('input',schedule);
+for(const n of [1,2])$('o'+n).addEventListener('change',()=>{
+  const field=$('o'+n),value=Number(field.value);
+  if(field.value.trim()==='' || !Number.isFinite(value) || value < 0 || value > 5){
+    $('status').textContent='奇异值须为 0 到 5 之间的有限数值。';
+    field.value=Number($('s'+n).value).toFixed(2);return;
+  }
+  $('s'+n).value=String(value);$('status').textContent='';schedule();
+});
+new ResizeObserver(schedule).observe(document.querySelector('.steps'));
+sync();sample();
+</script>
+</html>
